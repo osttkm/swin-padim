@@ -1,18 +1,14 @@
 import random
 from random import sample
-import argparse
 import numpy as np
 import numba as nb
 import os
 import csv
-import pickle
 from tqdm import tqdm
 from collections import OrderedDict
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import roc_curve
 from sklearn.metrics import precision_recall_curve
-from sklearn.covariance import LedoitWolf
-from scipy.spatial.distance import mahalanobis
 from scipy.ndimage import gaussian_filter
 from skimage import morphology
 from skimage.segmentation import mark_boundaries
@@ -20,14 +16,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 from concurrent import futures
-import cv2
+
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from torchvision import transforms
+import transformers as T
 from torchvision.models import wide_resnet50_2, resnet18, resnet50
-from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
+# from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
+from src.dataset_code.mvtec import get_mvtec_loader, get_mvtec_dataset
 
 
 class PaDiM():
@@ -75,8 +71,8 @@ class PaDiM():
         # 論文では３層目までしか行っていなかったが実験的に４層目も追加して確認してみただけらしい
         channels1 = [64, 128, 256, 512]
         channels2 = [256, 512, 1024, 2048]
-        # test_channel = [256,512,512,1024]
-        test_channel = [1024,256]
+        swinv2_channel = [192,384,768,1536]
+        wide50_channel = [256,512,1024,2048]
         print(self.use_layers)
         if self.arch == 'resnet18':
             model = resnet18(pretrained=True, progress=True)
@@ -92,7 +88,12 @@ class PaDiM():
             model = wide_resnet50_2(pretrained=True, progress=True)
             t_d = 0
             for i in self.use_layers:
-                t_d += test_channel[i-1]
+                t_d += wide50_channel[i-1]
+        elif self.arch == 'swinv2':
+            model = T.Swinv2Model.from_pretrained("microsoft/swinv2-large-patch4-window12to16-192to256-22kto1k-ft")
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
         if self.use_Rd:
             idx = self.get_reduce_dimension_id(t_d)
         else:
@@ -118,14 +119,24 @@ class PaDiM():
             outputs.append(output)
         
         # ４層分にデータを通してモデルから特徴量を持ってくる。別に三層でも構わん
-        if 1 in self.use_layers:
-            model.layer1[-1].register_forward_hook(hook)
-        if 2 in self.use_layers:
-            model.layer2[-2].register_forward_hook(hook)
-        if 3 in self.use_layers:
-            model.layer3[-1].register_forward_hook(hook)
-        if 4 in self.use_layers:
-            model.layer4[-1].register_forward_hook(hook)
+        if self.arch == "swinv2":
+            if 1 in self.use_layers:
+                model.encoder.layers[0].blocks[-1].register_forward_hook(hook)
+            if 2 in self.use_layers:
+                model.encoder.layers[1].blocks[-1].register_forward_hook(hook)
+            if 3 in self.use_layers:
+                model.encoder.layers[2].blocks[-1].register_forward_hook(hook)
+            if 4 in self.use_layers:
+                model.encoder.layers[3].blocks[-1].register_forward_hook(hook)
+        else:
+            if 1 in self.use_layers:
+                model.layer1[-1].register_forward_hook(hook)
+            if 2 in self.use_layers:
+                model.layer2[-1].register_forward_hook(hook)
+            if 3 in self.use_layers:
+                model.layer3[-1].register_forward_hook(hook)
+            if 4 in self.use_layers:
+                model.layer4[-1].register_forward_hook(hook)
 
         # 得られた特徴量を層ごとに別々で格納するための配列の準備
         feature_outputs = [(f'layer{i}', []) for i in self.use_layers]
@@ -144,18 +155,25 @@ class PaDiM():
                 _ = model(x.float().to(self.device)) 
             # get intermediate layer outputs
             for k, v in zip(feature_outputs.keys(), outputs):   #zip関数で複数変数でfor文を回している
-                feature_outputs[k].append(v.cpu().detach())     
+                
+                if self.arch=="swinv2":
+                    fdim,num_feat = v[0].shape[1],v[0].shape[2]
+                    v = v[0].reshape((1,int(np.sqrt(fdim)),int(np.sqrt(fdim)),num_feat))
+                    v = v.permute(0,3,1,2)
+                    feature_outputs[k].append(v.cpu().detach()) 
+                else:
+                    feature_outputs[k].append(v.cpu().detach())   
             # initialize hook outputs
             outputs = []
-        for k, v in feature_outputs.items():    #抽出した特徴量(tensor型)を.item()で取り出している
+        for k, v in feature_outputs.items():    #抽出した特徴量(tensor型)をlayer毎にlistとして抽出，layer毎にまとめている
             feature_outputs[k] = torch.cat(v, 0) # .mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
-        
+
         layer_names = ['layer'+str(num) for num in self.use_layers]
         embedding_vectors = feature_outputs[layer_names[0]]
+        # ここでサイズの違う埋め込みをまとめている
         if len(layer_names) != 1:
             for layer_name in layer_names[1:]:
                 embedding_vectors = self.embedding_concat(embedding_vectors, feature_outputs[layer_name])
-        
         embedding = torch.index_select(embedding_vectors, 1, idx)
         # print(f'gt_list={np.shape(gt_list)}')
         # print(f'gt_mask_list={np.shape(gt_mask_list)}')
@@ -320,23 +338,6 @@ class PaDiM():
     
     # ピクセル単位での異常の位置特定
     def cal_pixel_level_roc(self, scores, gt_masks):
-        # print(f'gt_masks={gt_masks.flatten()}')
-        """下記の一文について、gt_masks.flatten()ではエラーを吐いた。以下エラー
-        File "/home/oshita/padim/padim_main.py", line 26, in <module>
-        padim.test()
-        File "/home/oshita/padim/src/modules/padim_high.py", line 437, in test
-        self.evaluate(train_dataloader, test_dataloader)
-        File "/home/oshita/padim/src/modules/padim_high.py", line 413, in evaluate
-        pixel_auc, threshold = self.cal_pixel_level_roc(scores, gt_masks)
-        File "/home/oshita/padim/src/modules/padim_high.py", line 331, in cal_pixel_level_roc
-        fpr, tpr, th = roc_curve(gt_masks.flatten(), scores.flatten())
-        File "/opt/miniconda3/envs/develop/lib/python3.8/site-packages/sklearn/metrics/_ranking.py", line 962, in roc_curve
-        fps, tps, thresholds = _binary_clf_curve(
-        File "/opt/miniconda3/envs/develop/lib/python3.8/site-packages/sklearn/metrics/_ranking.py", line 731, in _binary_clf_curve
-        raise ValueError("{0} format is not supported".format(y_type))
-    ValueError: continuous format is not supported
-
-結局のところ、変数がfloat型になっていたことが原因らしい。データセットを変えると怒られたがなぜなのかはわからない。"""
         precision, recall, thresholds = precision_recall_curve(gt_masks.astype(int).flatten(),scores.flatten())
         a = 2 * precision * recall
         b = precision + recall
@@ -467,6 +468,11 @@ class PaDiM():
         self.score_write_csv(image_auc, 0)
 
     def test(self):
+        seed = self.seed
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+
         train_dataloader, test_dataloader = self.get_loader()
         self.evaluate(train_dataloader, test_dataloader)
     
@@ -517,11 +523,11 @@ class PaDiM():
     ==ここで、rivet.pyの関数はしっかり呼び出すことができている。srcの中のファイルだから？しっかり調べておくこと。
     """
     def get_loader(self, train_transforms=None, test_transforms=None):
-        train_loader, test_loader = get_rivet_loader(category=self.data_category, train_transform=train_transforms, test_transform=test_transforms, batch_size=1)
+        train_loader, test_loader = get_mvtec_loader(category=self.data_category, train_transform=train_transforms, test_transform=test_transforms, batch_size=1)
         return train_loader, test_loader
     
     def get_dataset(self, train_transforms=None, test_transforms=None):
-        train_dataset, test_dataset = get_rivet_dataset(category=self.data_category, train_transforms=train_transforms, test_transforms=test_transforms)
+        train_dataset, test_dataset = get_mvtec_dataset(category=self.data_category, train_transforms=train_transforms, test_transforms=test_transforms)
         return train_dataset, test_dataset
 
 

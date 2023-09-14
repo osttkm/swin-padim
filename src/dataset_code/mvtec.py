@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 class MVTecAD(torch.utils.data.Dataset):
 
-    def __init__(self, root='/home/data/mvtec', category='bottle', train: bool=True, transform=None, resize=256, cropsize=224):
+    def __init__(self, root='/home/dataset/mvtec', category='bottle', train: bool=True, transform=None, resize=256, cropsize=256):
         """
         :param root:        MVTecAD dataset dir
         :param category:    MVTecAD category
@@ -100,7 +100,7 @@ class MVTecAD(torch.utils.data.Dataset):
 
         if self.transform_img:
             img = self.transform_img(img)
-            plt.imsave('test.png',img)
+            # plt.imsave('test.png',img)
         # print(f'mask_size={mask.shape}_img_size={img.shape}')
         
         return img, target, mask
@@ -109,7 +109,7 @@ class MVTecAD(torch.utils.data.Dataset):
         return len(self.img_paths)
 
 
-def get_mvtec_dataset(category, train_transform=None, test_transform=None, resize=256, cropsize=224):
+def get_mvtec_dataset(category, train_transform=None, test_transform=None, resize=256, cropsize=256):
     train_dataset = MVTecAD(category=category, train=True, transform=train_transform, resize=resize, cropsize=cropsize)
     test_dataset = MVTecAD(category=category, train=False, transform=test_transform, resize=resize, cropsize=cropsize)
     return train_dataset, test_dataset

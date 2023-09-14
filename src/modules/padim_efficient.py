@@ -28,7 +28,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
-from efficientnet_pytorch import EfficientNet
+# from efficientnet_pytorch import EfficientNet
 
 ## eff model
 from src.dataset_code.efficient_modified import EfficientNetModified
