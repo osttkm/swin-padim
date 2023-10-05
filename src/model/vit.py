@@ -29,16 +29,23 @@ class Vit(torch.nn.Module):
        
     
     def emmbeding(self,input):
-        return self.model.conv_proj(input)
+        return  self.model.encoder.dropout(self.model.conv_proj(input))
     
     def layerN(self,n,input):
         print(self.layer_num)
+        input = input.reshape((1,768,196))
+        input = torch.permute(input,(0,2,1))
         assert self.layer_num >= n
         output=0
         for n in range(0,n,1):
             if n==0:
-                import pdb;pdb.set_trace()
                 output = self.model.encoder.layers[0](input)
             else:
                 output = self.model.encoder.layers[n-1](output)
         return output
+    def forward(self,input):
+        output = self.emmbeding(input)
+        output = self.layerN(12,output)
+        output = self.model.encoder.ln(output)
+        # import pdb;pdb.set_trace()
+        return self.model.heads(output)

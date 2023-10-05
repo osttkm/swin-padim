@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 class MVTecAD(torch.utils.data.Dataset):
 
-    def __init__(self, root='/home/dataset/mvtec', category='bottle', train: bool=True, transform=None, resize=256, cropsize=256):
+    def __init__(self, root='/home/dataset/mvtec', category='bottle', train: bool=True, transform=None, resize=224, cropsize=224):
         """
         :param root:        MVTecAD dataset dir
         :param category:    MVTecAD category
@@ -27,6 +27,7 @@ class MVTecAD(torch.utils.data.Dataset):
         self.train_dir = os.path.join(root, category, 'train')
         self.test_dir = os.path.join(root, category, 'test')
         self.gt_dir = os.path.join(root, category, 'ground_truth')
+    
 
         self.normal_class = ['good']
         self.abnormal_class = os.listdir(self.test_dir)
@@ -103,13 +104,13 @@ class MVTecAD(torch.utils.data.Dataset):
             # plt.imsave('test.png',img)
         # print(f'mask_size={mask.shape}_img_size={img.shape}')
         
-        return img, target, mask
+        return img, target, mask,img_path
 
     def __len__(self):
         return len(self.img_paths)
 
 
-def get_mvtec_dataset(category, train_transform=None, test_transform=None, resize=256, cropsize=256):
+def get_mvtec_dataset(category, train_transform=None, test_transform=None, resize=224, cropsize=224):
     train_dataset = MVTecAD(category=category, train=True, transform=train_transform, resize=resize, cropsize=cropsize)
     test_dataset = MVTecAD(category=category, train=False, transform=test_transform, resize=resize, cropsize=cropsize)
     return train_dataset, test_dataset

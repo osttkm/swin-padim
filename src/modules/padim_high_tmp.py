@@ -16,14 +16,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 from concurrent import futures
-
+from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 import transformers as T
-from torchvision.models import wide_resnet50_2, resnet18, resnet50
-# from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
-from src.dataset_code.mvtec_tmp import get_mvtec_loader, get_mvtec_dataset
+from torchvision.models import wide_resnet50_2, resnet18, resnet50, vit_b_16, ViT_B_16_Weights,swin_v2_b,Swin_V2_B_Weights
+from transformers import CLIPModel, CLIPProcessor
+from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
+from src.dataset_code.mvtec import get_mvtec_loader, get_mvtec_dataset
+from src.model.swin import Swinv2
+from src.model.vit import Vit
+from src.model.conformers import get_model
 
 
 class PaDiM():
@@ -71,8 +75,12 @@ class PaDiM():
         # 論文では３層目までしか行っていなかったが実験的に４層目も追加して確認してみただけらしい
         channels1 = [64, 128, 256, 512]
         channels2 = [256, 512, 1024, 2048]
-        swinv2_channel = [192,384,768,1536]
+        vit_b_16_channel = [196,196,196,196,196,196,196,196,196,196,196,196]
+        swinv2_channel = [256,512,1024,1024]
+        # swinv2_channel = [192,384,768,1536]
         wide50_channel = [256,512,1024,2048]
+        conformer_vit_channel = [197,197,197,197,197,197,197,197,197,197,197]
+        conformer_cnn_channel = [384,384,384,768,768,768,768,1536,1536,1536,1536]
         print(self.use_layers)
         if self.arch == 'resnet18':
             model = resnet18(pretrained=True, progress=True)
@@ -89,11 +97,118 @@ class PaDiM():
             t_d = 0
             for i in self.use_layers:
                 t_d += wide50_channel[i-1]
-        elif self.arch == 'swinv2':
-            model = T.Swinv2Model.from_pretrained("microsoft/swinv2-large-patch4-window12to16-192to256-22kto1k-ft")
+        elif self.arch == 'swinv2_s':
+            model = Swinv2("swin_v2_s")
             t_d = 0
             for i in self.use_layers:
                 t_d += swinv2_channel[i-1]
+        elif self.arch == 'swinv2_t':
+            model = swin_v2_b(Swin_V2_B_Weights)
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
+        elif self.arch == 'swinv2_b':
+            model = swin_v2_b(Swin_V2_B_Weights)
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
+            print("""
+            input size = [224, 224]
+            feature shape in layer1([16, 28, 28, 256])
+            feature shape in layer2([16, 14, 14, 512])
+            feature shape in layer3([16, 7, 7, 1024])
+            feature shape in layer4([16, 7, 7, 1024])
+            """)
+        elif self.arch == 'vit_b_16':
+            model = vit_b_16(ViT_B_16_Weights)
+            t_d = 0
+            for i in self.use_layers:
+                t_d += vit_b_16_channel[i-1]
+            print("""
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+            """)
+        elif self.arch == 'vit_b_32':
+            model = Vit("vit_b_32")
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
+        elif self.arch == 'vit_l_16':
+            model = Vit("vit_l_16")
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
+        elif self.arch == 'vit_l_32':
+            model = Vit("vit_l_32")
+            t_d = 0
+            for i in self.use_layers:
+                t_d += swinv2_channel[i-1]
+        elif self.arch == 'conformer_b_16_vit':
+            model = get_model('conformer_b_16')
+            t_d = 0
+            for i in self.use_layers:
+                t_d += conformer_vit_channel[i-2]
+            print("""
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 7, 7])    Transformer shape([1, 197, 576])
+            """)
+        elif self.arch == 'conformer_b_16_cnn':
+            model = get_model('conformer_b_16')
+            t_d = 0
+            for i in self.use_layers:
+                t_d += conformer_cnn_channel[i-2]
+            print("""
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 384, 56, 56])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 768, 28, 28])   Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
+                CNN feature shape([1, 1536, 7, 7])    Transformer shape([1, 197, 576])
+            """)
+        elif self.arch == 'clip_b_16':
+            model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+            model = model.vision_model
+            t_d = 0
+            for i in self.use_layers:
+                t_d += vit_b_16_channel[i-1]
+            print("""
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+            """)
         if self.use_Rd:
             idx = self.get_reduce_dimension_id(t_d)
         else:
@@ -116,18 +231,71 @@ class PaDiM():
         outputs = []
         # これはただ特徴量を埋め込みベクトルとして格納していっているだけ
         def hook(module, input, output):
-            outputs.append(output)
+            if self.arch == "conformer_b_16_cnn":
+                # CNN特徴
+                outputs.append(output[0])
+            elif self.arch == "conformer_b_16_vit":
+                # CNN特徴
+                outputs.append(output[1])
+            else:
+                outputs.append(output)
         
-        # ４層分にデータを通してモデルから特徴量を持ってくる。別に三層でも構わん
-        if self.arch == "swinv2":
+        # microsoftのswin用のhook
+        # if self.arch == "swinv2":
+        #     if 1 in self.use_layers:
+        #         model.encoder.layers[0].blocks[-1].register_forward_hook(hook)
+        #     if 2 in self.use_layers:
+        #         model.encoder.layers[1].blocks[-1].register_forward_hook(hook)
+        #     if 3 in self.use_layers:
+        #         model.encoder.layers[2].blocks[-1].register_forward_hook(hook)
+        #     if 4 in self.use_layers:
+        #         model.encoder.layers[3].blocks[-1].register_forward_hook(hook)
+
+        # torchvisionのswin用のhook
+        if self.arch == "swinv2_b" or self.arch == "swinv2_s" or self.arch == "swinv2_t":
             if 1 in self.use_layers:
-                model.encoder.layers[0].blocks[-1].register_forward_hook(hook)
+                model.features[2].register_forward_hook(hook)
             if 2 in self.use_layers:
-                model.encoder.layers[1].blocks[-1].register_forward_hook(hook)
+                model.features[4].register_forward_hook(hook)
             if 3 in self.use_layers:
-                model.encoder.layers[2].blocks[-1].register_forward_hook(hook)
+                model.features[6].register_forward_hook(hook)
             if 4 in self.use_layers:
-                model.encoder.layers[3].blocks[-1].register_forward_hook(hook)
+                model.features[7].register_forward_hook(hook)
+        elif self.arch == "vit_b_16":
+            for i in range(0,12):
+                if i in self.use_layers:
+                    getattr(model.encoder.layers, f"encoder_layer_{i}").register_forward_hook(hook)
+        elif self.arch == "clip_b_16":
+            if 0 in self.use_layers:
+                model.encoder.layers[0].register_forward_hook(hook)
+            if 1 in self.use_layers:
+                model.encoder.layers[1].register_forward_hook(hook)
+            if 2 in self.use_layers:
+                model.encoder.layers[2].register_forward_hook(hook)
+            if 3 in self.use_layers:
+                model.encoder.layers[3].register_forward_hook(hook)
+            if 4 in self.use_layers:
+                model.encoder.layers[4].register_forward_hook(hook)
+            if 5 in self.use_layers:
+                model.encoder.layers[5].register_forward_hook(hook)
+            if 6 in self.use_layers:
+                model.encoder.layers[6].register_forward_hook(hook)
+            if 7 in self.use_layers:
+                model.encoder.layers[7].register_forward_hook(hook)
+            if 8 in self.use_layers:
+                model.encoder.layers[8].register_forward_hook(hook)
+            if 9 in self.use_layers:
+                model.encoder.layers[9].register_forward_hook(hook)
+            if 10 in self.use_layers:
+                model.encoder.layers[10].register_forward_hook(hook)
+            if 11 in self.use_layers:
+                model.encoder.layers[11].register_forward_hook(hook)
+
+        elif self.arch in ["conformer_b_16_cnn", "conformer_b_16_vit"]:
+            for i in range(2, 13):
+                if i in self.use_layers:
+                    getattr(model, f"conv_trans_{i}").register_forward_hook(hook)
+        # resnet系はこんな感じのhookでいい
         else:
             if 1 in self.use_layers:
                 model.layer1[-1].register_forward_hook(hook)
@@ -143,24 +311,49 @@ class PaDiM():
         # 配列をレイヤー番号で検索できるように辞書型に直している
         feature_outputs = OrderedDict(feature_outputs)
         gt_list = []
+        path_list = []
         gt_mask_list = []
         imgs = []
-
-        for (x, y, mask) in tqdm(loader, '| feature extraction | %s |' % self.data_category):
+        for (x, y, mask,path) in tqdm(loader, '| feature extraction | %s |' % self.data_category):
             imgs.extend(x.cpu().detach().numpy())
             gt_mask_list.extend(mask.cpu().detach().numpy())
             gt_list.extend(y.cpu().detach().numpy()) # extend...リストに対して、別のリストやタプルを末尾に追加できる関数
-            # model prediction
-            with torch.no_grad():                    # torch.no_gradはテンソルの勾配の計算を不可にするContext-manager. テンソルの勾配の計算を不可にすることでメモリの消費を減らす事が出来る。
-                _ = model(x.float().to(self.device)) 
+            path_list.extend(path)
+            
+            # ここで特徴抽出をしている，hookで対応した部分の特徴量がとられている
+            # torch.no_gradはテンソルの勾配の計算を不可にするContext-manager. テンソルの勾配の計算を不可にすることでメモリの消費を減らす事が出来る。
+            with torch.no_grad():   
+                _ = model(x.float().to(self.device))
             # get intermediate layer outputs
             for k, v in zip(feature_outputs.keys(), outputs):   #zip関数で複数変数でfor文を回している
-                
-                if self.arch=="swinv2":
-                    fdim,num_feat = v[0].shape[1],v[0].shape[2]
-                    v = v[0].reshape((1,int(np.sqrt(fdim)),int(np.sqrt(fdim)),num_feat))
+                if self.arch=="swinv2_b":
+                    # microsoftのswin用
+                    # fdim,num_feat = v[0].shape[1],v[0].shape[2]
+                    # v = v[0].reshape((1,int(np.sqrt(fdim)),int(np.sqrt(fdim)),num_feat))
+                    # v = v.permute(0,3,1,2)
                     v = v.permute(0,3,1,2)
-                    feature_outputs[k].append(v.cpu().detach()) 
+                    feature_outputs[k].append(v.cpu().detach())
+                elif self.arch=="conformer_b_16_vit":
+                    # cls tokenを抜き取る
+                    v = v[0][1:].reshape((1,196,576))
+                    fdim,num_feat = v.shape[1],v.shape[2]
+                    v = torch.permute(v,(0,2,1))
+                    v = v.reshape((1,num_feat,int(np.sqrt(fdim)),int(np.sqrt(fdim))))
+                    feature_outputs[k].append(v.cpu().detach())  
+                elif self.arch=="vit_b_16":
+                    # cls tokenを抜き取る
+                    v = v[0][1:].reshape((1,196,768))
+                    fdim,num_feat = v.shape[1],v.shape[2]
+                    v = torch.permute(v,(0,2,1))
+                    v = v.reshape((1,num_feat,int(np.sqrt(fdim)),int(np.sqrt(fdim))))
+                    feature_outputs[k].append(v.cpu().detach())  
+                elif self.arch=="clip_b_16":
+                    v = v[0]
+                    v = v[0][1:].reshape((1,196,768))
+                    fdim,num_feat = v.shape[1],v.shape[2]
+                    v = torch.permute(v,(0,2,1))
+                    v = v.reshape((1,num_feat,int(np.sqrt(fdim)),int(np.sqrt(fdim))))
+                    feature_outputs[k].append(v.cpu().detach())
                 else:
                     feature_outputs[k].append(v.cpu().detach())   
             # initialize hook outputs
@@ -175,11 +368,8 @@ class PaDiM():
             for layer_name in layer_names[1:]:
                 embedding_vectors = self.embedding_concat(embedding_vectors, feature_outputs[layer_name])
         embedding = torch.index_select(embedding_vectors, 1, idx)
-        # print(f'gt_list={np.shape(gt_list)}')
-        # print(f'gt_mask_list={np.shape(gt_mask_list)}')
-        # print(f'imgs={np.shape(imgs)}')
         self.gt_list = np.array(gt_list)
-        return embedding.numpy(), np.array(imgs), np.array(gt_list), np.array(gt_mask_list)
+        return embedding.numpy(), np.array(imgs), np.array(gt_list), np.array(gt_mask_list),np.array(path_list)
     
     # ベクトル化
     def embedding_flatten(self, embedding):
@@ -229,7 +419,7 @@ class PaDiM():
     # ピクセル単位で次元ごとのガウス分布を取得する
     def get_multivariate_gaussian_distribution(self, loader):
         model, idx = self.model, self.idx
-        embedding, _, _, _ = self.feature_extraction(model, loader, idx)
+        embedding, _, _, _, _ = self.feature_extraction(model, loader, idx)
         mean = self.get_embedding_mean(self.embedding_flatten(embedding))
         cov = self.get_embedding_cov(embedding).astype(mean.dtype)
         train_outputs = [mean, cov]
@@ -240,7 +430,7 @@ class PaDiM():
         train_outputs = self.get_multivariate_gaussian_distribution(train_loader)
 
         model, idx = self.model, self.idx
-        test_embedding, imgs, targets, gt_masks = self.feature_extraction(model, test_loader, idx)
+        test_embedding, imgs, targets, gt_masks,img_path = self.feature_extraction(model, test_loader, idx)
         B, C, H, W = test_embedding.shape
         test_embedding = self.embedding_flatten(test_embedding) # (B, C, H*W)
         # dist_list = []
@@ -271,7 +461,7 @@ class PaDiM():
         dist_list = torch.tensor(dist_list)
         dist_matrix = F.interpolate(dist_list.unsqueeze(1), size=imgs[0].shape[1], mode='bilinear',
                                   align_corners=False).squeeze().numpy()
-        return dist_matrix, imgs, targets, gt_masks
+        return dist_matrix, imgs, targets, gt_masks, img_path
     
     # 異常マップの獲得
     def get_score_map(self, dist_matrix):
@@ -289,7 +479,7 @@ class PaDiM():
         return scores
 
     # 画像の異常特定
-    def cal_image_level_roc(self, scores, targets):
+    def cal_image_level_roc(self, scores, targets,name):
         img_scores = scores.reshape(scores.shape[0], -1).max(axis=1)
         gt_list = np.uint8(targets != 0)
         fpr, tpr, th = roc_curve(gt_list, img_scores)
@@ -311,14 +501,14 @@ class PaDiM():
         ax.set_title('Image-level ROC Curve (area = {:.4f})'.format(img_roc_auc))
         ax.grid()
         ax.plot(fpr, tpr)  # , marker='o')
-        plt.savefig(os.path.join(self.save_path, 'image-level-roc-curve.png'), transparent=False)
+        plt.savefig(os.path.join(self.save_path, f'{name}_image-level-roc-curve.png'), transparent=False)
         plt.clf()
         plt.close()
 
         return img_roc_auc
 
     """"ヒストグラムが生成されていない。この関数に関係している変数でおかしいところがどっかにあるはず"""
-    def plot_histgram_anomaly_scores(self, imgs, scores, targets):
+    def plot_histgram_anomaly_scores(self, imgs, scores, targets,name):
         img_scores = scores.reshape(scores.shape[0], -1).max(axis=1)
         gt_list = np.uint8(targets != 0)
         fig_hist, ax_hist = plt.subplots()
@@ -334,10 +524,10 @@ class PaDiM():
         ax_hist.legend()
         ax_hist.grid(which='major', axis='y', color='grey',
                 alpha=0.8, linestyle="--", linewidth=1)
-        fig_hist.savefig(os.path.join(self.save_path, 'histgram.png'), transparent=False)
+        fig_hist.savefig(os.path.join(self.save_path, f'{name}_histgram.png'), transparent=False)
     
     # ピクセル単位での異常の位置特定
-    def cal_pixel_level_roc(self, scores, gt_masks):
+    def cal_pixel_level_roc(self, scores, gt_masks,name):
         precision, recall, thresholds = precision_recall_curve(gt_masks.astype(int).flatten(),scores.flatten())
         a = 2 * precision * recall
         b = precision + recall
@@ -355,7 +545,7 @@ class PaDiM():
         ax.set_title('Pixel-level ROC Curve (area = {:.4f})'.format(per_pixel_rocauc))
         ax.grid()
         ax.plot(fpr, tpr)  # , marker='o')
-        plt.savefig(os.path.join(self.save_path, 'pixel-level-roc-curve.png'), transparent=False)
+        plt.savefig(os.path.join(self.save_path, f'{name}_pixel-level-roc-curve.png'), transparent=False)
         plt.clf()
         plt.close()
         return per_pixel_rocauc, threshold
@@ -442,24 +632,52 @@ class PaDiM():
 
     
     def evaluate(self, train_loader, test_loader):
-        dist_matrix, imgs, targets, gt_masks = self.get_distance_matrix(train_loader, test_loader)
+        dist_matrix, imgs, targets, gt_masks, img_path = self.get_distance_matrix(train_loader, test_loader)
         scores = self.get_score_map(dist_matrix)
-        image_auc = self.cal_image_level_roc(scores, targets)
-        pixel_auc, threshold = self.cal_pixel_level_roc(scores, gt_masks)
 
-        self.plot_histgram_anomaly_scores(imgs,scores, targets)
+        image_auc = self.cal_image_level_roc(scores, targets,name="all")
+        pixel_auc, threshold = self.cal_pixel_level_roc(scores, gt_masks,name="all")
+
+        category = np.unique(np.array([Path(p).parent.name for p in img_path]))
+        # goodという文字列が含まれる場合，それを配列の一番最後の要素にする
+        if 'good' in category:
+            category = np.delete(category, np.where(category == 'good')[0][0])
+            category = np.append(category, 'good')
+            
+        # categoryというキーの下にpixel_level_aucとimage_level_aucとscoresとtargetsを格納する辞書型変数の定義
+        category = {c: {'pixel_level_auc': 0, 'image_level_auc': 0, 'scores': [], 'targets': [],'gt_masks': [],'threshold':[]} for c in category}
+        for c in category:
+            category[c]['scores'] = scores[[Path(p).parent.name == c for p in img_path]]
+            category[c]['targets'] = targets[[Path(p).parent.name == c for p in img_path]]
+            category[c]['gt_masks'] = gt_masks[[Path(p).parent.name == c for p in img_path]]
+            # category['pixel_level_auc'] = pixel_auc[[Path(p).parent.name == c for p in img_path]]
+            # category['image_level_auc'] = image_auc[[Path(p).parent.name == c for p in img_path]]
+        for c in category:
+            if c == 'good':
+                print('break!!')  
+                break
+            s = np.concatenate([category[c]['scores'],category["good"]['scores']])
+            t = np.concatenate([category[c]['targets'],category["good"]['targets']])
+            gt = np.concatenate([category[c]['gt_masks'],category["good"]['gt_masks']])
+            category[c]['image_level_auc'] = self.cal_image_level_roc(s, t,name=c)
+            category[c]['pixel_level_auc'], category[c]['threshold'] = self.cal_pixel_level_roc(s, gt,name=c)
+            self.plot_histgram_anomaly_scores(np.concatenate([imgs[[Path(p).parent.name == 'good' for p in img_path]],imgs[[Path(p).parent.name == c for p in img_path]]]),s, t, name=c)
+            self.plot_fig(np.concatenate([imgs[[Path(p).parent.name == 'good' for p in img_path]],imgs[[Path(p).parent.name == c for p in img_path]]]), s, gt, category[c]['threshold'],c)
+            self.score_write_csv_per_category(category[c]['image_level_auc'],category[c]['pixel_level_auc'],c)
+
+        self.plot_histgram_anomaly_scores(imgs,scores, targets,name="all")
         self.plot_fig(imgs, scores, gt_masks, threshold, self.data_category)
         self.score_write_csv(image_auc, pixel_auc)
     
     def auc_evaluate(self, train_loader, test_loader):
-        dist_matrix, imgs, targets, gt_masks = self.get_distance_matrix(train_loader, test_loader)
+        dist_matrix, imgs, targets, gt_masks,img_path = self.get_distance_matrix(train_loader, test_loader)
         scores = self.get_score_map(dist_matrix)
         image_auc = self.cal_image_level_roc(scores, targets)
         return image_auc
 
     
     def img_level_evaluate(self, train_loader, test_loader):
-        dist_matrix, imgs, targets, gt_masks = self.get_distance_matrix(train_loader, test_loader)
+        dist_matrix, imgs, targets, gt_masks,img_path = self.get_distance_matrix(train_loader, test_loader)
         scores = self.get_score_map(dist_matrix)
         image_auc = self.cal_image_level_roc(scores, targets)
         # pixel_auc, threshold = self.cal_pixel_level_roc(scores, gt_masks)
@@ -505,6 +723,19 @@ class PaDiM():
                 file = open(os.path.join(self.save_path, '..', 'result.csv'), 'a')
                 writer = csv.writer(file)
             writer.writerow([self.data_category, self.arch, '_'.join(map(str, self.use_layers)), self.Rd, self.use_Rd, image_auc, pixel_auc,self.seed])
+        finally:
+            file.close()
+    
+    def score_write_csv_per_category(self, image_auc, pixel_auc,ano_category):
+        try:
+            if not os.path.exists(os.path.join(self.save_path+'/', '..', f'{ano_category}_result.csv')):
+                file = open(os.path.join(self.save_path+'/', '..', f'{ano_category}_result.csv'), 'w')
+                writer = csv.writer(file)
+                writer.writerow(['data_class', 'model', 'layers', 'Rd', 'use_Rd',f'{ano_category}_image_ROC', f'{ano_category}_pixel_ROC', 'seed'])
+            else:
+                file = open(os.path.join(self.save_path+'/', '..', f'{ano_category}_result.csv'), 'a')
+                writer = csv.writer(file)
+            writer.writerow([self.data_category+'_'+ano_category, self.arch, '_'.join(map(str, self.use_layers)), self.Rd, self.use_Rd, image_auc, pixel_auc,self.seed])
         finally:
             file.close()
     

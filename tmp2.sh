@@ -1,53 +1,15 @@
-python padim_main.py --seed 0 --data_category "hazelnut" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 1 --data_category "hazelnut" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 2 --data_category "hazelnut" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 0 --data_category "cable" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 1 --data_category "cable" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 2 --data_category "cable" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 0 --data_category "carpet" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 1 --data_category "carpet" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 2 --data_category "carpet" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 0 --data_category "bottle" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 1 --data_category "bottle" --arch "wide_resnet50_2" --use_layers "1-2-3"
-python padim_main.py --seed 2 --data_category "bottle" --arch "wide_resnet50_2" --use_layers "1-2-3"
+# Define arrays for the architectures, use_layers, and data_categories
+archs=("conformer_b_16_cnn" "conformer_b_16_vit")
+use_layers_list=("3" "7" "10" "11" "3-11" "3-7" "3-10" "7-10" "7-11" "10-11")
+data_categories=("hazelnut" "cable" "carpet" "bottle" "capsule" "grid" "leather" "metal_nut" "pill" "screw" "tile" "toothbrush" "transistor" "zipper" "wood")
 
-
-python padim_main.py --seed 0 --data_category "hazelnut" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 1 --data_category "hazelnut" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 2 --data_category "hazelnut" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 0 --data_category "cable" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 1 --data_category "cable" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 2 --data_category "cable" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 0 --data_category "carpet" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 1 --data_category "carpet" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 2 --data_category "carpet" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 0 --data_category "bottle" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 1 --data_category "bottle" --arch "resnet50" --use_layers "1-2-4"
-python padim_main.py --seed 2 --data_category "bottle" --arch "resnet50" --use_layers "1-2-4"
-
-python padim_main.py --seed 0 --data_category "hazelnut" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 1 --data_category "hazelnut" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 2 --data_category "hazelnut" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 0 --data_category "cable" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 1 --data_category "cable" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 2 --data_category "cable" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 0 --data_category "carpet" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 1 --data_category "carpet" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 2 --data_category "carpet" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 0 --data_category "bottle" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 1 --data_category "bottle" --arch "swinv2" --use_layers "1-3-4"
-python padim_main.py --seed 2 --data_category "bottle" --arch "swinv2" --use_layers "1-3-4"
-
-python padim_main.py --seed 0 --data_category "hazelnut" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 1 --data_category "hazelnut" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 2 --data_category "hazelnut" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 0 --data_category "cable" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 1 --data_category "cable" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 2 --data_category "cable" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 0 --data_category "carpet" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 1 --data_category "carpet" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 2 --data_category "carpet" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 0 --data_category "bottle" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 1 --data_category "bottle" --arch "resnet50" --use_layers "2-3-4"
-python padim_main.py --seed 2 --data_category "bottle" --arch "resnet50" --use_layers "2-3-4"
-
+# Loop through the combinations
+for arch in "${archs[@]}"; do
+    for use_layers in "${use_layers_list[@]}"; do
+        for data_category in "${data_categories[@]}"; do
+            for seed in {0..2}; do
+                python padim_main.py --seed "$seed" --data_category "$data_category" --arch "$arch" --use_layers "$use_layers"
+            done
+        done
+    done
+done
