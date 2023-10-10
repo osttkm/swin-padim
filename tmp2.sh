@@ -1,8 +1,6 @@
-# Define arrays for the architectures, use_layers, and data_categories
-archs=("conformer_b_16_cnn" "conformer_b_16_vit")
-use_layers_list=("3" "7" "10" "11" "3-11" "3-7" "3-10" "7-10" "7-11" "10-11")
-data_categories=("hazelnut" "cable" "carpet" "bottle" "capsule" "grid" "leather" "metal_nut" "pill" "screw" "tile" "toothbrush" "transistor" "zipper" "wood")
-
+archs=("mae_b_16")
+use_layers_list=("2" "5" "8" "11" "2-5" "2-8" "2-11" "5-8" "5-11" "8-11")
+data_categories=("pill" "screw" "tile" "toothbrush" "transistor" "zipper" "wood")
 # Loop through the combinations
 for arch in "${archs[@]}"; do
     for use_layers in "${use_layers_list[@]}"; do

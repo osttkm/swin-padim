@@ -4,6 +4,7 @@ import numpy as np
 import numba as nb
 import os
 import csv
+from PIL import Image
 from tqdm import tqdm
 from collections import OrderedDict
 from sklearn.metrics import roc_auc_score
@@ -22,6 +23,7 @@ import torch
 import torch.nn.functional as F
 import transformers as T
 from torchvision.models import wide_resnet50_2, resnet18, resnet50, vit_b_16, ViT_B_16_Weights,swin_v2_b,Swin_V2_B_Weights
+from transformers import ViTForImageClassification
 from src.dataset_code.rivet import get_rivet_dataset, get_rivet_loader
 from src.dataset_code.mvtec import get_mvtec_loader, get_mvtec_dataset
 from src.model.swin import Swinv2
@@ -187,6 +189,25 @@ class PaDiM():
                 CNN feature shape([1, 1536, 14, 14])  Transformer shape([1, 197, 576])
                 CNN feature shape([1, 1536, 7, 7])    Transformer shape([1, 197, 576])
             """)
+        elif self.arch == 'mae_b_16':
+            model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
+            t_d = 0
+            for i in self.use_layers:
+                t_d += vit_b_16_channel[i-1]
+            print("""
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+                Transformer shape([1, 197, 768])
+            """)
         if self.use_Rd:
             idx = self.get_reduce_dimension_id(t_d)
         else:
@@ -247,6 +268,14 @@ class PaDiM():
             for i in range(2, 13):
                 if i in self.use_layers:
                     getattr(model, f"conv_trans_{i}").register_forward_hook(hook)
+        elif self.arch == "clip_b_16":
+            for i in range(12):  # 12 layers in the model
+                if i in self.use_layers:
+                    model.encoder.layers[i].register_forward_hook(hook)
+        elif self.arch == "mae_b_16":
+            for i in range(12):  # 12 layers in the model
+                if i in self.use_layers:
+                    model.vit.encoder.layer[i].register_forward_hook(hook)
         # resnet系はこんな感じのhookでいい
         else:
             if 1 in self.use_layers:
@@ -277,6 +306,7 @@ class PaDiM():
             with torch.no_grad():                
                 _ = model(x.float().to(self.device))
             # get intermediate layer outputs
+
             for k, v in zip(feature_outputs.keys(), outputs):   #zip関数で複数変数でfor文を回している
                 if self.arch=="swinv2_b":
                     # microsoftのswin用
@@ -295,6 +325,13 @@ class PaDiM():
                 elif self.arch=="vit_b_16":
                     # cls tokenを抜き取る
                     v = v[0][1:].reshape((1,196,768))
+                    fdim,num_feat = v.shape[1],v.shape[2]
+                    v = torch.permute(v,(0,2,1))
+                    v = v.reshape((1,num_feat,int(np.sqrt(fdim)),int(np.sqrt(fdim))))
+                    feature_outputs[k].append(v.cpu().detach())  
+                elif self.arch=="mae_b_16":
+                    # cls tokenを抜き取る
+                    v = v[0][0][1:].reshape((1,196,768))
                     fdim,num_feat = v.shape[1],v.shape[2]
                     v = torch.permute(v,(0,2,1))
                     v = v.reshape((1,num_feat,int(np.sqrt(fdim)),int(np.sqrt(fdim))))
@@ -326,6 +363,14 @@ class PaDiM():
     def get_embedding_mean(self, embedding):
         return np.mean(embedding, axis=0)
 
+    def save_img(self,out):
+        out = out - out.min()
+        out = out / out.max()
+        out = out * 255
+        out = out.cpu().detach().numpy()
+        out = out.astype('uint8')
+        out = Image.fromarray(out)
+        out.save('test.png')
     
     def get_embedding_cov(self, embedding):
         if embedding.ndim == 4:

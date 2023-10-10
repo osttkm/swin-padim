@@ -266,30 +266,14 @@ class PaDiM():
                 if i in self.use_layers:
                     getattr(model.encoder.layers, f"encoder_layer_{i}").register_forward_hook(hook)
         elif self.arch == "clip_b_16":
-            if 0 in self.use_layers:
-                model.encoder.layers[0].register_forward_hook(hook)
-            if 1 in self.use_layers:
-                model.encoder.layers[1].register_forward_hook(hook)
-            if 2 in self.use_layers:
-                model.encoder.layers[2].register_forward_hook(hook)
-            if 3 in self.use_layers:
-                model.encoder.layers[3].register_forward_hook(hook)
-            if 4 in self.use_layers:
-                model.encoder.layers[4].register_forward_hook(hook)
-            if 5 in self.use_layers:
-                model.encoder.layers[5].register_forward_hook(hook)
-            if 6 in self.use_layers:
-                model.encoder.layers[6].register_forward_hook(hook)
-            if 7 in self.use_layers:
-                model.encoder.layers[7].register_forward_hook(hook)
-            if 8 in self.use_layers:
-                model.encoder.layers[8].register_forward_hook(hook)
-            if 9 in self.use_layers:
-                model.encoder.layers[9].register_forward_hook(hook)
-            if 10 in self.use_layers:
-                model.encoder.layers[10].register_forward_hook(hook)
-            if 11 in self.use_layers:
-                model.encoder.layers[11].register_forward_hook(hook)
+            for i in range(12):  # 12 layers in the model
+                if i in self.use_layers:
+                    model.encoder.layers[i].register_forward_hook(hook)
+        elif self.arch == "mae_b_16":
+            for i in range(12):  # 12 layers in the model
+                if i in self.use_layers:
+                    model.decoder.decoder_layers[i].register_forward_hook(hook)
+
 
         elif self.arch in ["conformer_b_16_cnn", "conformer_b_16_vit"]:
             for i in range(2, 13):
